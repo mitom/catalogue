@@ -5,20 +5,22 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
+
+	sqltrace "gopkg.in/DataDog/dd-trace-go.v1/contrib/database/sql"
+	sqlxtrace "gopkg.in/DataDog/dd-trace-go.v1/contrib/jmoiron/sqlx"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
+	ddtracer "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 
 	"github.com/go-kit/kit/log"
 	stdopentracing "github.com/opentracing/opentracing-go"
-	zipkin "github.com/openzipkin/zipkin-go-opentracing"
 
 	"net"
 	"net/http"
 
 	"path/filepath"
 
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/jmoiron/sqlx"
+	mysql "github.com/go-sql-driver/mysql"
 	"github.com/microservices-demo/catalogue"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/weaveworks/common/middleware"
@@ -42,11 +44,22 @@ func init() {
 }
 
 func main() {
+	addr := net.JoinHostPort(
+		os.Getenv("DD_AGENT_SERVICE_HOST"),
+		os.Getenv("DD_AGENT_SERVICE_PORT"),
+	)
+	tracer := opentracer.New(
+		ddtracer.WithServiceName("socks-catalogue"),
+		ddtracer.WithAgentAddr(addr),
+	)
+	defer ddtracer.Stop()
+	stdopentracing.SetGlobalTracer(tracer)
+
 	var (
 		port   = flag.String("port", "80", "Port to bind HTTP listener") // TODO(pb): should be -addr, default ":80"
 		images = flag.String("images", "./images/", "Image path")
 		dsn    = flag.String("DSN", "catalogue_user:default_password@tcp(catalogue-db:3306)/socksdb", "Data Source Name: [username[:password]@][protocol[(address)]]/dbname")
-		zip    = flag.String("zipkin", os.Getenv("ZIPKIN"), "Zipkin address")
+		// zip    = flag.String("zipkin", os.Getenv("ZIPKIN"), "Zipkin address")
 	)
 	flag.Parse()
 
@@ -70,43 +83,44 @@ func main() {
 		logger = log.NewContext(logger).With("caller", log.DefaultCaller)
 	}
 
-	var tracer stdopentracing.Tracer
-	{
-		if *zip == "" {
-			tracer = stdopentracing.NoopTracer{}
-		} else {
-			// Find service local IP.
-			conn, err := net.Dial("udp", "8.8.8.8:80")
-			if err != nil {
-				logger.Log("err", err)
-				os.Exit(1)
-			}
-			localAddr := conn.LocalAddr().(*net.UDPAddr)
-			host := strings.Split(localAddr.String(), ":")[0]
-			defer conn.Close()
-			logger := log.NewContext(logger).With("tracer", "Zipkin")
-			logger.Log("addr", zip)
-			collector, err := zipkin.NewHTTPCollector(
-				*zip,
-				zipkin.HTTPLogger(logger),
-			)
-			if err != nil {
-				logger.Log("err", err)
-				os.Exit(1)
-			}
-			tracer, err = zipkin.NewTracer(
-				zipkin.NewRecorder(collector, false, fmt.Sprintf("%v:%v", host, port), ServiceName),
-			)
-			if err != nil {
-				logger.Log("err", err)
-				os.Exit(1)
-			}
-		}
-		stdopentracing.InitGlobalTracer(tracer)
-	}
+	// var tracer stdopentracing.Tracer
+	// {
+	// 	if *zip == "" {
+	// 		tracer = stdopentracing.NoopTracer{}
+	// 	} else {
+	// 		// Find service local IP.
+	// 		conn, err := net.Dial("udp", "8.8.8.8:80")
+	// 		if err != nil {
+	// 			logger.Log("err", err)
+	// 			os.Exit(1)
+	// 		}
+	// 		localAddr := conn.LocalAddr().(*net.UDPAddr)
+	// 		host := strings.Split(localAddr.String(), ":")[0]
+	// 		defer conn.Close()
+	// 		logger := log.NewContext(logger).With("tracer", "Zipkin")
+	// 		logger.Log("addr", zip)
+	// 		collector, err := zipkin.NewHTTPCollector(
+	// 			*zip,
+	// 			zipkin.HTTPLogger(logger),
+	// 		)
+	// 		if err != nil {
+	// 			logger.Log("err", err)
+	// 			os.Exit(1)
+	// 		}
+	// 		tracer, err = zipkin.NewTracer(
+	// 			zipkin.NewRecorder(collector, false, fmt.Sprintf("%v:%v", host, port), ServiceName),
+	// 		)
+	// 		if err != nil {
+	// 			logger.Log("err", err)
+	// 			os.Exit(1)
+	// 		}
+	// 	}
+	// 	stdopentracing.InitGlobalTracer(tracer)
+	// }
 
 	// Data domain.
-	db, err := sqlx.Open("mysql", *dsn)
+	sqltrace.Register("mysql", &mysql.MySQLDriver{}, sqltrace.WithServiceName("socks-catalogue-db"))
+	db, err := sqlxtrace.Open("mysql", *dsn)
 	if err != nil {
 		logger.Log("err", err)
 		os.Exit(1)

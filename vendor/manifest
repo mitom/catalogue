@@ -785,6 +785,33 @@
 			"revision": "bfee1239d796830ca346767650cce5ba90d58c57",
 			"branch": "master",
 			"notests": true
+		},
+		{
+			"importpath": "gopkg.in/DataDog/dd-trace-go.v1/ddtrace",
+			"repository": "https://gopkg.in/DataDog/dd-trace-go.v1",
+			"vcs": "git",
+			"revision": "3ca8142e16b5191920fcd9f0559adf98abf037ba",
+			"branch": "master",
+			"path": "ddtrace",
+			"notests": true
+		},
+		{
+			"importpath": "gopkg.in/DataDog/dd-trace-go.v1/contrib/database/sql",
+			"repository": "https://gopkg.in/DataDog/dd-trace-go.v1",
+			"vcs": "git",
+			"revision": "3ca8142e16b5191920fcd9f0559adf98abf037ba",
+			"branch": "master",
+			"path": "contrib/database/sql",
+			"notests": true
+		},
+		{
+			"importpath": "gopkg.in/DataDog/dd-trace-go.v1/contrib/jmoiron/sqlx",
+			"repository": "https://gopkg.in/DataDog/dd-trace-go.v1",
+			"vcs": "git",
+			"revision": "3ca8142e16b5191920fcd9f0559adf98abf037ba",
+			"branch": "master",
+			"path": "/contrib/jmoiron/sqlx",
+			"notests": true
 		}
 	]
 }
